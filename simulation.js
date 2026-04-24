@@ -1,6 +1,6 @@
-import { addLogEntry } from './utils.js';
-import { initArchitectureSVG, updateArchitecture, animateComponentGlow, shootArchParticle } from './architecture.js';
-import { initDataGuardSVG, simulateRedoTransport, performSwitchoverVisuals, performFailoverVisuals } from './dataguard.js';
+import { addLogEntry } from 'utils.js';
+import { initArchitectureSVG, updateArchitecture, animateComponentGlow, shootArchParticle } from 'architecture.js';
+import { initDataGuardSVG, simulateRedoTransport, performSwitchoverVisuals, performFailoverVisuals } from 'dataguard.js';
 
 const state = {
     primaryStatus: 'UP',
