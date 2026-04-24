@@ -1,5 +1,5 @@
 import { addLogEntry } from './utils.js';
-import { initArchitectureSVG, updateArchitecture, animateDataFlow } from './architecture.js';
+import { initArchitectureSVG, updateArchitecture, animateComponentGlow, shootArchParticle } from './architecture.js';
 import { initDataGuardSVG, simulateRedoTransport, performSwitchoverVisuals, performFailoverVisuals } from './dataguard.js';
 
 const state = {
@@ -15,7 +15,8 @@ const state = {
 document.addEventListener('DOMContentLoaded', () => {
     initArchitectureSVG('arch-container');
     initDataGuardSVG('dg-container');
-    addLogEntry('Oracle 19c & Data Guard Simulator Initialized.', 'success');
+    addLogEntry('Oracle 19c Enterprise Simulator Initialized.', 'success');
+    addLogEntry('Instance started. SGA allocated. Background processes started.', 'info');
     
     // UI Event Listeners
     document.getElementById('slide-latency').addEventListener('input', (e) => document.getElementById('val-latency').textContent = e.target.value);
@@ -30,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-failover').addEventListener('click', simulatePrimaryFailure);
     document.getElementById('btn-switchover').addEventListener('click', executeSwitchover);
     
-    setInterval(simulateMMNL, 5000);
+    setInterval(simulateMMNL, 8000);
 });
 
 function updateSCN(amount) {
@@ -42,47 +43,72 @@ function updateSCN(amount) {
 function updateLag() {
     const lag = state.scn - state.standbyScn;
     const badge = document.getElementById('lag-indicator');
-    badge.textContent = lag === 0 ? 'In Sync (Lag: 0)' : `Apply Lag: ${lag}`;
+    badge.textContent = lag === 0 ? 'In Sync (Lag: 0 SCN)' : `Apply Lag: ${lag} SCN`;
     badge.className = lag === 0 ? 'lag-badge' : 'lag-badge error';
 }
 
 function executeSelect() {
-    if(state.primaryStatus !== 'UP') return addLogEntry('Primary is DOWN!', 'error');
-    addLogEntry('Session executing SQL SELECT...', 'highlight');
+    if(state.primaryStatus !== 'UP') return addLogEntry('ORA-01034: ORACLE not available', 'error');
     
-    const isHit = Math.random() > 0.3;
+    addLogEntry('Client requesting SQL SELECT...', 'info');
+    shootArchParticle('parse', 400); // User -> Shared Pool
+    
     setTimeout(() => {
+        const isHit = Math.random() > 0.4;
         if(isHit) {
-            addLogEntry('Soft Parse. Buffer Cache Hit.', 'success');
-            animateDataFlow('arch_BufferCache', 'read');
+            addLogEntry('Wait Event: SQL*Net message from client.', 'info');
+            addLogEntry('Library Cache Hit (Soft Parse). Buffer Cache Hit (Logical Read).', 'success');
+            animateComponentGlow('arch_BufferCache', 'read');
+            shootArchParticle('fetch', 600); // Buffer Cache -> User
         } else {
-            addLogEntry('Hard Parse. Buffer Cache Miss. Physical Read.', 'warn');
-            animateDataFlow('disk_DataFiles', 'read');
-            animateDataFlow('arch_BufferCache', 'read');
+            addLogEntry('Library Cache Miss (Hard Parse). Generating Execution Plan.', 'warn');
+            addLogEntry('Wait Event: db file sequential read (Physical Read).', 'warn');
+            
+            shootArchParticle('readDisk', 800); // DataFile -> Buffer Cache
+            animateComponentGlow('disk_DataFiles', 'read');
+            
+            setTimeout(() => {
+                animateComponentGlow('arch_BufferCache', 'read');
+                shootArchParticle('fetch', 600); // Buffer Cache -> User
+                addLogEntry('Rows fetched to PGA and returned to Client.', 'success');
+            }, 800);
         }
     }, 400);
 }
 
 function executeUpdate() {
-    if(state.primaryStatus !== 'UP') return addLogEntry('Primary is DOWN!', 'error');
+    if(state.primaryStatus !== 'UP') return addLogEntry('ORA-01034: ORACLE not available', 'error');
     
     const burst = parseInt(document.getElementById('slide-dml').value);
-    addLogEntry(`Executing DML burst (Intensity: ${burst})...`, 'highlight');
+    addLogEntry(`Executing DML UPDATE... (Rows: ${burst})`, 'highlight');
     
-    state.dirtyBuffers += burst;
-    state.redoBufferLevel += burst * 2.5;
-    animateDataFlow('arch_BufferCache', 'write');
-    updateArchitecture(state);
-    
-    if(state.redoBufferLevel >= 100) {
-        addLogEntry('Redo Log Buffer 1/3 full. LGWR activated.', 'warn');
-        state.redoBufferLevel = 0;
+    shootArchParticle('parse', 300);
+    setTimeout(() => {
+        state.dirtyBuffers += burst;
+        state.redoBufferLevel += burst * 3;
+        
+        shootArchParticle('redoGen', 500); // User -> Redo Buffer
+        animateComponentGlow('arch_BufferCache', 'write');
         updateArchitecture(state);
-        animateDataFlow('proc_LGWR', 'write');
-        animateDataFlow('disk_OnlineRedo', 'write');
-        updateSCN(Math.floor(Math.random() * 50) + 10);
-        triggerTransport();
-    }
+        
+        addLogEntry(`Blocks dirtied. Redo entries written to Log Buffer.`, 'info');
+        
+        if(state.redoBufferLevel >= 100) {
+            addLogEntry('Redo Log Buffer filled. LGWR triggering...', 'warn');
+            state.redoBufferLevel = 0;
+            updateArchitecture(state);
+            
+            animateComponentGlow('proc_LGWR', 'write');
+            shootArchParticle('lgwrWrite', 400); // LGWR -> Redo Disks
+            
+            setTimeout(() => {
+                animateComponentGlow('disk_OnlineRedo', 'write');
+                addLogEntry('Wait Event: log file parallel write. LGWR write complete.', 'success');
+                updateSCN(Math.floor(Math.random() * 50) + 10);
+                triggerTransport();
+            }, 400);
+        }
+    }, 300);
 }
 
 function triggerTransport() {
@@ -90,110 +116,139 @@ function triggerTransport() {
     const latency = parseInt(document.getElementById('slide-latency').value);
     const mode = document.getElementById('sel-protection').value;
     
-    addLogEntry(`LGWR shipping redo payload (${mode})...`, 'info');
-    simulateRedoTransport(latency + 400);
+    addLogEntry(`LNS shipping redo to Standby (Mode: ${mode})...`, 'info');
+    simulateRedoTransport(latency + 500);
     
     setTimeout(() => {
         state.applyQueue++;
-        addLogEntry('RFS received redo payload.', 'success');
+        addLogEntry('RFS received redo payload. Writing to Standby Redo Log.', 'success');
         applyRedo();
-    }, latency + 400);
+    }, latency + 500);
 }
 
 function applyRedo() {
     if(state.applyQueue > 0) {
-        addLogEntry('MRP applying redo to Standby...', 'info');
+        addLogEntry('MRP (Media Recovery Process) applying redo to Standby...', 'info');
         setTimeout(() => {
             state.applyQueue--;
             state.standbyScn = state.scn;
             updateLag();
-            addLogEntry('MRP apply complete. Standby in sync.', 'success');
+            addLogEntry('MRP apply complete. Standby SCN updated.', 'success');
         }, 800);
     }
 }
 
 function forceCheckpoint() {
     if(state.primaryStatus !== 'UP') return;
-    addLogEntry('ALTER SYSTEM CHECKPOINT triggered.', 'highlight');
-    animateDataFlow('proc_CKPT', 'write');
+    addLogEntry('ALTER SYSTEM CHECKPOINT; Command Issued.', 'highlight');
+    
+    animateComponentGlow('proc_CKPT', 'write');
+    shootArchParticle('ckptToControl', 600); // CKPT -> Control file
+    addLogEntry('CKPT updating Control Files and Data File headers.', 'info');
     
     setTimeout(() => {
         if(state.dirtyBuffers > 0) {
-            addLogEntry(`DBWn writing ${state.dirtyBuffers} dirty buffers to disk.`, 'info');
-            animateDataFlow('proc_DBWn', 'write');
-            animateDataFlow('disk_DataFiles', 'write');
-            state.dirtyBuffers = 0;
+            addLogEntry(`DBWn triggering to write ${state.dirtyBuffers} dirty buffers.`, 'warn');
+            animateComponentGlow('proc_DBWn', 'write');
+            shootArchParticle('dbwWrite', 800); // Buffer Cache -> Data File
+            
+            setTimeout(() => {
+                animateComponentGlow('disk_DataFiles', 'write');
+                addLogEntry('Wait Event: db file parallel write. Checkpoint complete.', 'success');
+                state.dirtyBuffers = 0;
+            }, 800);
         } else {
-            addLogEntry('No dirty buffers to write.', 'info');
+            addLogEntry('Checkpoint complete. No dirty buffers in queue.', 'success');
         }
     }, 600);
 }
 
 function switchRedoLog() {
     if(state.primaryStatus !== 'UP') return;
-    addLogEntry('ALTER SYSTEM SWITCH LOGFILE.', 'highlight');
-    animateDataFlow('proc_LGWR', 'write');
+    addLogEntry('ALTER SYSTEM SWITCH LOGFILE; Command Issued.', 'highlight');
+    animateComponentGlow('proc_LGWR', 'write');
+    
     setTimeout(() => {
-        addLogEntry('ARCn creating Archived Redo Log.', 'info');
-        animateDataFlow('proc_ARCn', 'write');
-        animateDataFlow('disk_ArchiveLogs', 'write');
-    }, 600);
+        addLogEntry('ARCn (Archiver) process started archiving filled redo log.', 'warn');
+        animateComponentGlow('proc_ARCn', 'write');
+        setTimeout(() => {
+            animateComponentGlow('disk_ArchiveLogs', 'write');
+            addLogEntry('Archiving complete. Online Redo log available for reuse.', 'success');
+        }, 800);
+    }, 500);
 }
 
 function awrSnapshot() {
     if(state.primaryStatus !== 'UP') return;
-    addLogEntry('MMON capturing AWR Snapshot.', 'info');
-    animateDataFlow('proc_MMON', 'read');
+    addLogEntry('MMON (Manageability Monitor) capturing AWR Snapshot.', 'info');
+    animateComponentGlow('proc_MMON', 'read');
 }
 
 function populateIM() {
     if(state.primaryStatus !== 'UP') return;
-    addLogEntry('IMCO populating In-Memory Column Store.', 'info');
-    animateDataFlow('arch_InMemory', 'write');
+    addLogEntry('IMCO (In-Memory Coordinator) populating IMCUs.', 'info');
+    animateComponentGlow('arch_InMemory', 'write');
 }
 
 function simulateMMNL() {
-    if(state.primaryStatus === 'UP') addLogEntry('MMNL flushing ASH buffer (simulated background task).', 'info');
+    if(state.primaryStatus === 'UP') {
+        addLogEntry('MMNL flushing ASH (Active Session History) buffer to disk.', 'info');
+    }
 }
 
 function simulatePrimaryFailure() {
-    addLogEntry('!!! PRIMARY INSTANCE CRASHED !!!', 'error');
+    addLogEntry('CRITICAL: ORA-01092: ORACLE instance terminated. Disconnection forced.', 'error');
     state.primaryStatus = 'DOWN';
-    document.getElementById('left-title').textContent = 'FAILED PRIMARY';
-    document.getElementById('left-title').style.color = '#ef4444';
+    
+    document.getElementById('left-title').textContent = 'FAILED PRIMARY DATABASE';
+    document.querySelector('.status-indicator.online').className = 'status-indicator offline';
+    document.querySelector('.status-indicator.offline').textContent = 'OFFLINE';
+    
+    // Disable primary controls
+    ['btn-select', 'btn-update', 'btn-ckpt', 'btn-logswitch', 'btn-awr', 'btn-im', 'btn-switchover'].forEach(id => {
+        document.getElementById(id).disabled = true;
+    });
+
     performFailoverVisuals();
     
     const btn = document.getElementById('btn-failover');
-    btn.textContent = 'Activate Standby';
-    btn.className = 'warning';
+    btn.textContent = 'EXECUTE FAILOVER (ACTIVATE)';
+    btn.className = 'btn-warning';
     btn.onclick = executeFailover;
 }
 
 function executeFailover() {
-    addLogEntry('Executing Failover. Standby applying remaining redo.', 'warn');
-    applyRedo();
+    addLogEntry('ALTER DATABASE RECOVER MANAGED STANDBY DATABASE CANCEL;', 'warn');
+    addLogEntry('ALTER DATABASE FAILOVER TO target_standby;', 'highlight');
+    
+    applyRedo(); // Apply remaining
     setTimeout(() => {
-        addLogEntry('Standby transitioning to PRIMARY role.', 'success');
+        addLogEntry('Standby transitioning to PRIMARY role. Opening database...', 'success');
         state.standbyStatus = 'PRIMARY';
-        document.getElementById('right-title').textContent = 'NEW PRIMARY';
+        document.getElementById('right-title').textContent = 'NEW PRIMARY DATABASE';
+        document.getElementById('primary-role').textContent = 'FAILOVER COMPLETED';
         document.getElementById('btn-failover').disabled = true;
-    }, 1500);
+    }, 2000);
 }
 
 function executeSwitchover() {
     if(state.primaryStatus !== 'UP' || state.standbyStatus !== 'UP') return addLogEntry('Instances must be UP for Switchover.', 'error');
-    addLogEntry('Initiating graceful Switchover...', 'warn');
+    addLogEntry('ALTER DATABASE COMMIT TO SWITCHOVER TO PHYSICAL STANDBY;', 'warn');
     
     setTimeout(() => {
-        addLogEntry('Primary shipping End-Of-Redo to Standby.', 'info');
+        addLogEntry('Primary shipping End-Of-Redo (EOR) to Standby.', 'info');
+        triggerTransport(); // Ensure last redo is shipped
+        
         setTimeout(() => {
-            addLogEntry('Target Standby applying all redo.', 'info');
+            addLogEntry('Target Standby applied all redo (Zero Data Loss).', 'info');
             state.standbyScn = state.scn;
             updateLag();
+            
             setTimeout(() => {
-                addLogEntry('Target opened read/write as new Primary.', 'success');
+                addLogEntry('Role transition complete. Target opened read/write.', 'success');
                 performSwitchoverVisuals();
-            }, 1000);
-        }, 1000);
+                document.getElementById('primary-role').textContent = 'SWITCHOVER COMPLETED';
+            }, 1500);
+        }, 1500);
     }, 1000);
 }
