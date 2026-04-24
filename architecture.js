@@ -1,4 +1,4 @@
-import { createSVGRect, createSVGText, createSVGPath, showTooltip, hideTooltip } from './utils.js';
+import { createSVGRect, createSVGText, createSVGPath, showTooltip, hideTooltip } from 'utils.js';
 
 let svg;
 let redoFillBar;
