@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oracle 19c Architecture & Data Guard Simulator</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header class="top-nav">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z"/></svg>
+            Oracle 19c Modular Simulator
+        </div>
+        <div class="metrics">Global SCN: <span id="scn-counter">1000000</span></div>
+    </header>
+
+    <main class="grid-container">
+        <!-- Primary Architecture Panel -->
+        <div class="panel left-panel">
+            <h2 id="left-title">Primary Instance (Oracle 19c)</h2>
+            <div id="arch-container"></div>
+        </div>
+        
+        <!-- Data Guard Panel -->
+        <div class="panel right-panel">
+            <h2 id="right-title">Physical Standby (Data Guard)</h2>
+            <div class="lag-badge" id="lag-indicator">Lag: 0</div>
+            <div id="dg-container"></div>
+        </div>
+    </main>
+
+    <footer class="bottom-panel">
+        <div class="controls">
+            <h3>Instance Actions</h3>
+            <div class="btn-grid">
+                <button id="btn-select">Execute SELECT</button>
+                <button id="btn-update">Execute UPDATE</button>
+                <button id="btn-ckpt">Force Checkpoint</button>
+                <button id="btn-logswitch">Switch Redo Log</button>
+                <button id="btn-awr">AWR Snapshot</button>
+                <button id="btn-im">Populate IM</button>
+            </div>
+            
+            <h3>Data Guard Controls</h3>
+            <div class="btn-grid">
+                <button id="btn-failover" class="danger">Primary Failure</button>
+                <button id="btn-switchover" class="warning">Execute Switchover</button>
+            </div>
+            
+            <div class="sliders">
+                <label>Protection Mode:
+                    <select id="sel-protection">
+                        <option value="MAX_PERFORMANCE">Max Performance (ASYNC)</option>
+                        <option value="MAX_AVAILABILITY">Max Availability (SYNC)</option>
+                    </select>
+                </label>
+                <label>Network Latency: <span id="val-latency">50</span>ms
+                    <input type="range" id="slide-latency" min="10" max="1500" value="50">
+                </label>
+                <label>DML Burst (Redo Gen):
+                    <input type="range" id="slide-dml" min="1" max="100" value="10">
+                </label>
+            </div>
+        </div>
+        
+        <div class="log-panel">
+            <h3>Live Event Log</h3>
+            <div id="event-log"></div>
+        </div>
+    </footer>
+
+    <!-- Global Tooltip -->
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <!-- Main Module Entry -->
+    <script type="module" src="js/simulation.js"></script>
+</body>
+</html>
