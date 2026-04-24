@@ -1,57 +1,54 @@
-import { createSVGRect, createSVGText } from './utils.js';
+import { createSVGRect, createSVGText, createSVGPath } from './utils.js';
 
-let svg, particles = [], animFrame;
+let svg, particles = [];
 
 export function initDataGuardSVG(containerId) {
     const container = document.getElementById(containerId);
     svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 1000 750');
+    svg.setAttribute('viewBox', '0 0 1200 350');
     svg.setAttribute('width', '100%');
     svg.setAttribute('height', '100%');
     
     // Draw Primary Side (Left box)
     const primGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     primGroup.id = 'dg_primary';
-    primGroup.appendChild(createSVGRect(100, 100, 250, 500, 10, 'rgba(0,0,0,0.4)', '#3b82f6', 2));
-    primGroup.appendChild(createSVGText(225, 140, 'PRIMARY DB', '#93c5fd', 20));
+    primGroup.appendChild(createSVGRect(100, 50, 300, 250, 10, 'rgba(0,0,0,0.4)', '#3b82f6', 2));
+    primGroup.appendChild(createSVGText(250, 80, 'PRIMARY DATABASE', '#93c5fd', 18, 'middle', 'bold'));
     
-    primGroup.appendChild(createSVGRect(150, 250, 150, 60, 6, '#1e293b', '#ef4444', 1));
-    primGroup.appendChild(createSVGText(225, 285, 'LNS / LGWR', '#fff', 14));
+    primGroup.appendChild(createSVGRect(150, 120, 200, 60, 6, '#1e293b', '#ef4444', 1));
+    primGroup.appendChild(createSVGText(250, 155, 'LNS / LGWR', '#fff', 15));
     
-    primGroup.appendChild(createSVGRect(150, 400, 150, 100, 6, '#1e293b', '#eab308', 1));
-    primGroup.appendChild(createSVGText(225, 455, 'Online Redo', '#fff', 14));
+    primGroup.appendChild(createSVGRect(150, 210, 200, 60, 6, '#1e293b', '#eab308', 1));
+    primGroup.appendChild(createSVGText(250, 245, 'Online Redo Logs', '#fff', 14));
     svg.appendChild(primGroup);
     
     // Draw Standby Side (Right box)
     const stdGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     stdGroup.id = 'dg_standby';
-    stdGroup.appendChild(createSVGRect(650, 100, 250, 500, 10, 'rgba(0,0,0,0.4)', '#10b981', 2));
-    stdGroup.appendChild(createSVGText(775, 140, 'PHYSICAL STANDBY', '#6ee7b7', 20));
+    stdGroup.appendChild(createSVGRect(800, 50, 300, 250, 10, 'rgba(0,0,0,0.4)', '#10b981', 2));
+    stdGroup.appendChild(createSVGText(950, 80, 'PHYSICAL STANDBY', '#6ee7b7', 18, 'middle', 'bold'));
     
-    stdGroup.appendChild(createSVGRect(700, 250, 150, 60, 6, '#1e293b', '#ef4444', 1));
-    stdGroup.appendChild(createSVGText(775, 285, 'RFS Process', '#fff', 14));
+    stdGroup.appendChild(createSVGRect(850, 120, 200, 60, 6, '#1e293b', '#ef4444', 1));
+    stdGroup.appendChild(createSVGText(950, 155, 'RFS Process', '#fff', 15));
     
-    stdGroup.appendChild(createSVGRect(700, 360, 150, 80, 6, '#1e293b', '#eab308', 1));
-    stdGroup.appendChild(createSVGText(775, 405, 'Standby Redo Logs', '#fff', 14));
+    stdGroup.appendChild(createSVGRect(850, 210, 90, 60, 6, '#1e293b', '#eab308', 1));
+    stdGroup.appendChild(createSVGText(895, 245, 'Standby Redo', '#fff', 12));
     
-    stdGroup.appendChild(createSVGRect(700, 480, 150, 60, 6, '#1e293b', '#10b981', 1));
-    stdGroup.appendChild(createSVGText(775, 515, 'MRP (Apply)', '#fff', 14));
+    stdGroup.appendChild(createSVGRect(960, 210, 90, 60, 6, '#1e293b', '#10b981', 1));
+    stdGroup.appendChild(createSVGText(1005, 245, 'MRP (Apply)', '#fff', 13));
     svg.appendChild(stdGroup);
 
-    // Network Path
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', 'M300,280 L700,280');
-    path.setAttribute('stroke', 'rgba(239, 68, 68, 0.4)');
-    path.setAttribute('stroke-width', '4');
-    path.setAttribute('stroke-dasharray', '8,8');
+    // Network Path (Oracle Net)
+    const path = createSVGPath('M 350,150 L 850,150', '#ef4444', 4, '8,8');
+    path.style.opacity = '0.5';
     svg.appendChild(path);
+    svg.appendChild(createSVGText(600, 140, 'Oracle Net (Redo Transport)', '#94a3b8', 14));
 
     container.appendChild(svg);
-    renderParticles();
+    requestAnimationFrame(renderParticles);
 }
 
-function renderParticles() {
-    const time = performance.now();
+function renderParticles(time) {
     particles = particles.filter(p => {
         p.progress = (time - p.startTime) / p.duration;
         if(p.progress >= 1) {
@@ -66,14 +63,14 @@ function renderParticles() {
 
 export function simulateRedoTransport(latencyMs) {
     const particle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    particle.setAttribute('r', 7);
+    particle.setAttribute('r', 8);
     particle.setAttribute('fill', '#ef4444');
-    particle.setAttribute('cy', 280);
-    particle.setAttribute('filter', 'drop-shadow(0 0 6px #ef4444)');
+    particle.setAttribute('cy', 150);
+    particle.setAttribute('filter', 'drop-shadow(0 0 10px #ef4444)');
     svg.appendChild(particle);
     
     particles.push({
-        el: particle, startX: 300, endX: 700,
+        el: particle, startX: 350, endX: 850,
         startTime: performance.now(), duration: latencyMs, progress: 0
     });
 }
